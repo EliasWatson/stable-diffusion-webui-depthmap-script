@@ -255,8 +255,11 @@ def core_generation_funnel(outpath, inputimages, inputdepthmaps, inputnames, inp
                     inp[go.STEREO_DIVERGENCE], inp[go.STEREO_SEPARATION],
                     inp[go.STEREO_MODES],
                     inp[go.STEREO_BALANCE], inp[go.STEREO_OFFSET_EXPONENT], inp[go.STEREO_FILL_ALGO])
-                for c in range(0, len(stereoimages)):
-                    yield count, inp[go.STEREO_MODES][c], stereoimages[c]
+                for c in range(0, 4):
+                    image_type = ["left_eye", "left_mask", "right_eye", "right_mask"][c]
+                    yield count, image_type, stereoimages[c]
+                for c in range(4, len(stereoimages)):
+                    yield count, inp[go.STEREO_MODES][c - 4], stereoimages[c]
 
             if inp[go.GEN_NORMALMAP]:
                 normalmap = create_normalmap(
