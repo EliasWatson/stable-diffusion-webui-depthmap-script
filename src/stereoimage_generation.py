@@ -72,7 +72,10 @@ def create_stereoimages(original_image, depthmap, divergence, separation=0.0, mo
         )
     )
 
-    results = [left_eye, left_mask * 255, right_eye, right_mask * 255]
+    left_mask = np.repeat(np.expand_dims(left_mask * 255, axis=2), c, axis=2)
+    right_mask = np.repeat(np.expand_dims(right_mask * 255, axis=2), c, axis=2)
+
+    results = [left_eye, left_mask, right_eye, right_mask]
     for mode in modes:
         if mode == 'left-right':  # Most popular format. Common use case: displaying in HMD.
             results.append(np.hstack([left_eye, right_eye]))
