@@ -42,15 +42,37 @@ def create_stereoimages(original_image, depthmap, divergence, separation=0.0, mo
         return []
 
     original_image = np.asarray(original_image)
-    balance = (stereo_balance + 1) / 2
-    left_eye = original_image if balance < 0.001 else \
-        apply_stereo_divergence(original_image, depthmap, +1 * divergence * balance, -1 * separation,
-                                stereo_offset_exponent, fill_technique)
-    right_eye = original_image if balance > 0.999 else \
-        apply_stereo_divergence(original_image, depthmap, -1 * divergence * (1 - balance), separation,
-                                stereo_offset_exponent, fill_technique)
 
-    results = []
+    h, w, c = original_image.shape
+    blank_mask = np.ones(h * w, dtype=np.uint8)
+
+    balance = (stereo_balance + 1) / 2
+    left_eye, left_mask = (
+        (original_image, blank_mask)
+        if balance < 0.001 else
+        apply_stereo_divergence(
+            original_image,
+            depthmap,
+            +1 * divergence * balance,
+            -1 * separation,
+            stereo_offset_exponent,
+            fill_technique
+        )
+    )
+    right_eye, right_mask = (
+        (original_image, blank_mask)
+        if balance > 0.999 else
+        apply_stereo_divergence(
+            original_image,
+            depthmap,
+            -1 * divergence * (1 - balance),
+            separation,
+            stereo_offset_exponent,
+            fill_technique
+        )
+    )
+
+    results = [left_eye, left_mask * 255, right_eye, right_mask * 255]
     for mode in modes:
         if mode == 'left-right':  # Most popular format. Common use case: displaying in HMD.
             results.append(np.hstack([left_eye, right_eye]))
@@ -82,6 +104,8 @@ def apply_stereo_divergence(original_image, depth, divergence, separation, stere
     divergence_px = (divergence / 100.0) * original_image.shape[1]
     separation_px = (separation / 100.0) * original_image.shape[1]
 
+    h, w, c = original_image.shape
+
     if fill_technique in ['none', 'naive', 'naive_interpolating']:
         return apply_stereo_divergence_naive(
             original_image, normalized_depth, divergence_px, separation_px, stereo_offset_exponent, fill_technique
@@ -89,7 +113,7 @@ def apply_stereo_divergence(original_image, depth, divergence, separation, stere
     if fill_technique in ['polylines_soft', 'polylines_sharp']:
         return apply_stereo_divergence_polylines(
             original_image, normalized_depth, divergence_px, separation_px, stereo_offset_exponent, fill_technique
-        )
+        ), np.ones(h * w, dtype=np.uint8)
 
 
 @njit(parallel=False)
@@ -138,7 +162,7 @@ def apply_stereo_divergence_naive(
                 step = (r_border.astype(np.float_) - l_border) / total_steps
                 for col in range(l_pointer, r_pointer):
                     derived_image[row][col] = l_border + (step * (col - l_pointer + 1)).astype(np.uint8)
-        return derived_image
+        return derived_image, filled
     elif fill_technique == 'naive':
         derived_fix = np.copy(derived_image)
         for pos in np.where(filled == 0)[0]:
@@ -154,9 +178,9 @@ def apply_stereo_divergence_naive(
                 if 0 <= l_offset and filled[row_times_w + l_offset]:
                     derived_fix[row][col] = derived_image[row][l_offset]
                     break
-        return derived_fix
+        return derived_fix, filled
     else:  # none
-        return derived_image
+        return derived_image, filled
 
 
 @njit(parallel=True)  # fastmath=True does not reasonably improve performance
